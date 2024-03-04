@@ -1,0 +1,209 @@
+<html dir="ltr" lang="ru" chrome-refresh-2023="" class="" lazy-loaded="true"><head>
+    <meta charset="utf-8">
+    <title>Новая вкладка</title>
+    </head>
+    <body style="background-color: azure; ">  
+    </body>
+    <script>
+        let binded = {};
+        createSerializationDictionary(); 
+
+
+    /* Принцип сериализации:
+        - каждое число кодируем 2 знаками (стандартными символами ASCII)
+        - если число повторяется несколько раз, то добавляем сколько раз
+
+        например [1~|7~, 54, t0*5, 7 |b3] - это числа 111(777раз), 54, 300(5раз), 7(123раза)
+
+        Ограничения: Каждое число 1-999, повторяется не больше 1000 раз. Массив чисел может быть и больше 1000 чисел
+
+        !!! Для тестирования вызовите функцию exposeResults(свой массив, "название теста")
+    */
+
+
+
+
+
+        exposeResults(Array.from({length: 50}, () => Math.floor(Math.random() * 300) + 1 ), "50 случайных чисел от 1 до 300")
+        exposeResults(Array.from({length: 100}, () => Math.floor(Math.random() * 300) + 1 ), "100 случайных чисел 1 до 300")
+        exposeResults(Array.from({length: 500}, () => Math.floor(Math.random() * 300) + 1 ), "500 случайных чисел 1 до 300")
+        exposeResults(Array.from({length: 1000}, () => Math.floor(Math.random() * 300) + 1 ), "1000 случайных чисел 1 до 300")
+
+        //если количество чисел в массиве или количество повторяющихся чисел возрастает , то эффективность функции резко возрастает
+        exposeResults(Array.from({length: 4444}, () => Math.floor(Math.random() * 300) + 1 ), "4444 случайных чисел 1 до 300")
+        exposeResults([...Array(22).fill(777),54,...Array(5).fill(1),...Array(73).fill(98)], "100 чисел с повторами")
+
+
+
+
+
+
+
+
+        function createSerializationDictionary() {
+                    // создадим таблицу для обозначения всех 2х значных чисел одним символом ASCII
+        let letters = "abcdefghijklmnopqrtsuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+        let symbols = "!\"#$%&'()+,-./:;<=>?@[\\]^_`{}|~ *";
+        //  * , |  symbols will be used to serialize same numbers appered multiple times (a0*8 = a0 8times, a0|7~ = a0 777 times, a0|0 = 1000times a0)
+        let ASCIIsymbols = letters + symbols;
+        let tmp2 = 0; // variable used to exlude from binded numbers: 11, 22, 33, 44, 55, 66, 77 ,88 ,99 - they will be coded as 2 same numbers
+
+        //создадим словарь содержащий ключи для значений 10-99 (для кодирования трехначных чисел в 2значные)
+        for (i=10; i<100; i++) { 
+            if (Number.isInteger(i/11) && i!=0) { 
+                tmp2++; /*console.log(i + " exception");*/
+
+            } //исключаем из таблицы 11,22,33,44,55,66,77,88,99
+            else { binded[i] =  ASCIIsymbols[i-10-tmp2]; }
+        }
+        //console.log(binded)
+        }
+
+        // Функция сериализации. Принимает массив чисел, возвращает сериализованную строку (длинна массива может быть больше 1000 чисел, 
+        // но каждое число должно быть не более 999 и повторяться не более 1000 раз)
+        function serialZ(massive) {
+            massive.sort(function(a,b) { return a - b; });
+
+            let allstring = ""; //сделаем строку сериализованного массива     
+            massive.forEach((el, index) => {
+                number = el;
+                times = massive.lastIndexOf(el)+1 - index; //сколько раз встречается
+
+                if (massive[index] == massive[index-1]) { /*console.log("уже встречался, не записывать: " + el)*/} // не записывать. копии подсчитаны и записаны, когда число попалось в первый раз 
+                else { //число втречается первый раз => записать число и сколько раз встречается.
+                    if ( times == 1 ) {
+                        allstring = allstring + to2Digits(number); // просто прибавить к строке (такое число встречается единственный раз)
+                    }
+                    else if ( times < 10 ) { // 2-9 times
+                        allstring = allstring + to2Digits(number) + "*" + times;
+                    }
+                    else { // 10 -1000 times
+                        if ( times == 1000 ) { // only for same item repeated 1000 times! :)
+                            allstring = allstring + to2Digits(number) + "|0";
+                        }
+                        else {  // 10-999 times
+                            allstring = allstring + to2Digits(number) + "|" + to2Digits(times);
+                        }
+                    }
+                }
+            })
+
+            return allstring;
+        }
+
+
+        //Функция десериализации. Принимает сериализованную строку, возвращает массив чисел.
+        function deserialZ(string) {
+            let massive = [], nextIndex = 0, number2digits, str;
+
+            for (i = 0; i < string.length; i++) {
+                if ( i < nextIndex ) { // same entry going...
+                    //console.log("same number.. don't do ynything...")
+                }
+                else { // next number starts
+                    if ( string[i+2] != "*" &&  string[i+2] != "|") { // 1 time appeared => 2digits number => decode and push once
+                        number2digits = string[i] + string[i+1];
+                        //console.log("number2digits = [" + number2digits + "]", "  indexes = " + i + "," + (i+1))
+
+                        number = to3Digits(number2digits);
+                        massive.push(number);
+                        nextIndex = i+2;
+                    }
+                    else if ( string[i+2] == "*" ) { // push number 2-9 times
+                        str = string[i] + string[i+1] + string[i+2] + string[i+3];
+                        number2digits = string[i] + string[i+1];
+                        number = to3Digits(number2digits);
+                        for (j = 0; j < Number(string[i+3]); j++) {
+                            massive.push(number);                         
+                        }
+                        nextIndex = i+4;
+                    }
+                    else if ( string[i+2] == "|" ) { // push number 10-1000 times
+                        str = string[i] + string[i+1] + string[i+2] + string[i+3] + string[i+4];
+                            number2digits = string[i] + string[i+1];
+                            number = to3Digits(number2digits);
+                            for (j = 0; j < ((string[i+3] == "0") ? 1000 : to3Digits(string[i+3]+string[i+4])); j++) { // добавляем в массив   1000 или 10-999 раз
+                                massive.push(number);
+                            }
+                            nextIndex = i+5;
+                    }
+                }                
+            }            
+            return massive;
+        }
+
+
+
+        function to2Digits (number) {  // Функция сериализации числа. Принимает число до 999, возвращает число закодированное двумя ASCII знаками
+            number = number.toString();
+            if ( number.length == 1 ) {return number + " ";}
+            else if ( number.length == 2 ) {return number;}
+            else if ( number.length == 3 ) {
+                if (number[0] == number[1] && number[0] == number[2]) return number[0] + "~"; // all digits same. 111,333  returns  1~, 3~
+                else if (number[0] == number[1]) return number[0]+ binded[ number[1]+number[2] ]; // return coded into to digits number
+                else return binded[ number[0]+number[1] ] + number[2];
+            }
+        }
+
+        function to3Digits (number) { // Функция десериализации числа. Принимает сериализованно число, возвращает десериализованное
+            // если один из знаков не цифра => нужно раскодировать из словаря binded
+            if (Number.isNaN(Number(number))) { // 1 of 2 symbols must be decoded ... using binded table
+                if (number[1] == "~") { number = number[0]+number[0]+number[0]; } /// 111,222,333...
+                if (Number.isNaN(Number(number[0]))) { // first symbol must be decoded
+                    for (key in binded) {
+                        if (number[0] == binded[key]) { number = key+number[1]; break;}
+                    }
+                }
+                else { //second symbol must be decoded
+                    for (key in binded) {
+                        if (number[1] == binded[key]) { number = number[0]+key; break;}
+                    }
+                }
+            }
+            return Number(number);
+        }
+
+
+        function exposeResults(massive, title) { // функция представления результатов на экране . 
+                                                //Принимает массив чисел (1-999, каждое число должно повторяться не больше 1000 раз)
+                                                //вторым аргументом принимает название для отображения на экране
+            let div = document.createElement("div");
+
+            //title
+            let h = document.createElement("h4");
+            h.innerHTML = `"${title}"`;
+            div.appendChild(h);
+
+            //original massive
+            let original = document.createElement("textarea");
+            original.innerHTML = "Оригинальный массив: \n" + massive;
+            div.appendChild(original);
+            div.appendChild(document.createElement("br"))
+
+            //serialization result
+            let resultText = document.createElement("textarea");
+            let result = serialZ(massive); // *************** вот  здесь вызывается функция сериализации массива *****************
+            //console.log(result)
+            resultText.innerHTML = `Результат сериализации:\n${result}` + `\nРезультат десериализации:\n${deserialZ(result)}`;
+            div.appendChild(resultText);
+
+            // compression data 
+            let q = document.createElement("div");            
+            q.innerHTML = "Коэффициент сжатия = " + ( (JSON.stringify(massive).length - result.length) / JSON.stringify(massive).length*100 ) +"%";
+            div.appendChild(q);
+            let comp = document.createElement("div");
+            comp.innerHTML = `Простая сериализация, длина = ${JSON.stringify(massive).length} ; Сериализация функцией,  длина = ${result.length}`;
+            div.appendChild(comp);
+
+            // border line
+            let line = document.createElement("h5");
+            line.innerHTML = "********************************************************************";
+            div.appendChild(line);
+
+            //check original and result massives are equal
+            //console.log (JSON.stringify(massive.sort(function(a,b) { return a - b; })) ==  JSON.stringify(deserialZ(result)))
+
+            document.body.appendChild(div);
+        }
+    </script>
+</html>
